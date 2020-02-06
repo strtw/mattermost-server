@@ -24,7 +24,52 @@ func (a *App) GetRoleByName(name string) (*model.Role, *model.AppError) {
 }
 
 func (a *App) GetRolesByNames(names []string) ([]*model.Role, *model.AppError) {
-	return a.Srv.Store.Role().GetByNames(names)
+	roles, err := a.Srv.Store.Role().GetByNames(names)
+	if err != nil {
+		return nil, err
+	}
+
+	higherScopedPermissions, err := a.Srv.Store.Role().HigherScopedPermissions(names)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, hsp := range higherScopedPermissions {
+		for _, role := range roles {
+			role.Permissions = mergePermissions(role.Permissions, hsp.Permissions())
+		}
+	}
+
+	return roles, nil
+}
+
+func mergePermissions(channelPermissions, higherScopedPermissions []string) []string {
+	mergedPermissions := []string{}
+
+	for _, cp := range model.ALL_PERMISSIONS {
+		if _, ok := moderatedPermissions[cp.Id]; ok {
+			// use the permission from channel scheme (if it is also present on the higher-scoped scheme)
+			if includes(channelPermissions, cp.Id) && includes(higherScopedPermissions, cp.Id) {
+				mergedPermissions = append(mergedPermissions, cp.Id)
+			}
+		} else {
+			// use the permission from the higher-scoped scheme
+			if includes(higherScopedPermissions, cp.Id) {
+				mergedPermissions = append(mergedPermissions, cp.Id)
+			}
+		}
+	}
+
+	return mergedPermissions
+}
+
+func includes(list []string, item string) bool {
+	for _, it := range list {
+		if it == item {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) PatchRole(role *model.Role, patch *model.RolePatch) (*model.Role, *model.AppError) {

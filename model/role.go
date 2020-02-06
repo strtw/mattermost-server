@@ -88,6 +88,17 @@ func (r *Role) Patch(patch *RolePatch) {
 	}
 }
 
+type RolePermissions struct {
+	RoleName                string
+	TeamSchemeID            string
+	HigherScopedSchemename  string
+	HigherScopedPermissions string
+}
+
+func (rp *RolePermissions) Permissions() []string {
+	return strings.Split(rp.HigherScopedPermissions, " ")
+}
+
 // Returns an array of permissions that are in either role.Permissions
 // or patch.Permissions, but not both.
 func PermissionsChangedByPatch(role *Role, patch *RolePatch) []string {

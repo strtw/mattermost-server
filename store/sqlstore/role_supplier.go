@@ -14,6 +14,16 @@ import (
 	"github.com/mattermost/mattermost-server/v5/store"
 )
 
+var roleColNames map[string]string
+
+func init() {
+	roleColNames = map[string]string{
+		model.CHANNEL_GUEST_ROLE_ID: "DefaultChannelGuestRole",
+		model.CHANNEL_USER_ROLE_ID:  "DefaultChannelUserRole",
+		model.CHANNEL_ADMIN_ROLE_ID: "DefaultChannelAdminRole",
+	}
+}
+
 type SqlRoleStore struct {
 	SqlStore
 }
@@ -239,4 +249,59 @@ func (s *SqlRoleStore) PermanentDeleteAll() *model.AppError {
 	}
 
 	return nil
+}
+
+func (s *SqlRoleStore) higherScopedPermissionsQuery(channelRoleID string, roleNames []string) string {
+	colName := roleColNames[channelRoleID]
+
+	sqlTmpl := `
+		SELECT
+			RoleSchemes.%[1]s AS RoleName,
+			COALESCE(Teams.SchemeId, '') AS TeamSchemeId,
+			Schemes.Name AS HigherScopedSchemeName,
+			Roles.Permissions AS HigherScopedPermissions
+		FROM
+			Schemes AS RoleSchemes
+			JOIN Channels ON Channels.SchemeId = RoleSchemes.Id
+			JOIN Teams ON Teams.Id = Channels.TeamId
+			JOIN Schemes ON Schemes.Id = Teams.SchemeId
+			JOIN Roles ON Roles.Name = RoleSchemes.%[1]s
+		WHERE
+			RoleSchemes.%[1]s IN ('%[3]s')
+
+		UNION
+
+		SELECT
+			Schemes.%[1]s AS RoleName,
+			COALESCE(Teams.SchemeId, '') AS TeamSchemeId,
+			'%[2]s' AS HigherScopedScheme,
+			Roles.Permissions AS HigherScopedPermissions
+		FROM
+			Schemes
+			JOIN Channels ON Channels.SchemeId = Schemes.Id
+			JOIN Teams ON Teams.Id = Channels.TeamId
+			JOIN Roles ON Roles.Name = '%[2]s'
+		WHERE
+			Schemes.%[1]s IN ('%[3]s')
+			AND Teams.SchemeId IS NULL
+		`
+
+	return fmt.Sprintf(sqlTmpl, colName, channelRoleID, strings.Join(roleNames, "', '"))
+}
+
+func (s *SqlRoleStore) HigherScopedPermissions(roleNames []string) ([]*model.RolePermissions, *model.AppError) {
+	var allRolesPermissions []*model.RolePermissions
+
+	for _, channelRole := range []string{model.CHANNEL_GUEST_ROLE_ID, model.CHANNEL_USER_ROLE_ID, model.CHANNEL_ADMIN_ROLE_ID} {
+		sql := s.higherScopedPermissionsQuery(channelRole, roleNames)
+
+		var rolesPermissions []*model.RolePermissions
+		if _, err := s.GetReplica().Select(&rolesPermissions, sql); err != nil {
+			return nil, model.NewAppError("SqlRoleStore.HigherScopedPermissions", "store.sql_role.get_by_names.app_error", nil, err.Error(), http.StatusInternalServerError)
+		}
+
+		allRolesPermissions = append(allRolesPermissions, rolesPermissions...)
+	}
+
+	return allRolesPermissions, nil
 }
