@@ -15,6 +15,16 @@ import (
 	"github.com/mattermost/mattermost-server/v5/store"
 )
 
+var roleColNames map[string]string
+
+func init() {
+	roleColNames = map[string]string{
+		model.CHANNEL_GUEST_ROLE_ID: "DefaultChannelGuestRole",
+		model.CHANNEL_USER_ROLE_ID:  "DefaultChannelUserRole",
+		model.CHANNEL_ADMIN_ROLE_ID: "DefaultChannelAdminRole",
+	}
+}
+
 type SqlSchemeStore struct {
 	SqlStore
 }
