@@ -36,7 +36,9 @@ func (a *App) GetRolesByNames(names []string) ([]*model.Role, *model.AppError) {
 
 	for _, hsp := range higherScopedPermissions {
 		for _, role := range roles {
-			role.Permissions = mergePermissions(role.Permissions, hsp.Permissions())
+			if hsp.RoleName == role.Name {
+				role.Permissions = mergePermissions(role.Permissions, hsp.Permissions())
+			}
 		}
 	}
 

@@ -265,7 +265,7 @@ func (s *SqlRoleStore) higherScopedPermissionsQuery(channelRoleID string, roleNa
 			JOIN Channels ON Channels.SchemeId = RoleSchemes.Id
 			JOIN Teams ON Teams.Id = Channels.TeamId
 			JOIN Schemes ON Schemes.Id = Teams.SchemeId
-			JOIN Roles ON Roles.Name = RoleSchemes.%[1]s
+			JOIN Roles ON Roles.Name = Schemes.%[1]s
 		WHERE
 			RoleSchemes.%[1]s IN ('%[3]s')
 
